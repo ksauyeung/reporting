@@ -22,6 +22,7 @@ public class RunPNL {
     private static final String OKEXFUTURE_ADAPTER = "OKEXFUTURE_ADAPTER";
     private static final String DERABIT_ADAPTER = "DERABIT_ADAPTER";
     private static final String BITMEX_ADAPTER = "BITMEX_ADAPTER";
+    private static final String BELONGING_PAIR_DEFAULT = "initial";
 
     private static Map<String, String> openingTradeSide = new HashMap<>();
     private static Map<String, String> openingHedgeSymbol = new HashMap<>();
@@ -38,6 +39,7 @@ public class RunPNL {
     private static HashMap<String, String> sizesMap = new HashMap<>();
     private static String JOIN_SYMBOLS = "@@@";
 
+    private static SortedSet<PNLRawData> oneSidedTrades = new TreeSet<>();
 
     public static void main(String args[]) throws Exception{
 
@@ -89,7 +91,7 @@ public class RunPNL {
 
     private static SortedSet<PNLRawData> loadCSV() throws CloneNotSupportedException {
 
-        List<PNLRawData> list = processInputFile("trades.csv");
+        List<PNLRawData> list = processInputFile("prodtrades.csv");
 
         //TreeSet<PNLRawData> set = new TreeSet<>(list);
         //TreeSet<PNLRawData> set = list.stream().collect(Collectors.toCollection(TreeSet::new));
@@ -106,7 +108,7 @@ public class RunPNL {
                 data.setWaveId(Long.parseLong(data.getWave_id()));
                 data.setExecutionId(Long.parseLong(data.getExecution_id()));
 
-                data.setBelongingPair("initial");
+                data.setBelongingPair(BELONGING_PAIR_DEFAULT);
 
                 manualSet.add(data);
             }
@@ -135,7 +137,7 @@ public class RunPNL {
 
 
     private static Function<String, PNLRawData> mapToItem = (line) -> {
-        String[] p = line.split(",",-1);// a CSV has comma separated lines
+        String[] p = line.split(",",-1);// a CSV has comma separated lines, the -1 guarantees that all parts will show up even when they have no data, otherwise they get dropped
         PNLRawData item = new PNLRawData();
         item.setExecution_id(p[0]);//<-- this is the first column in the csv file
         item.setOrder_id(p[1]);
@@ -188,6 +190,7 @@ public class RunPNL {
                 PNLRawData data = iter.next();
                 if (!(sells.contains(data.getHedge_id() + "-" + data.getWave_id()) && buys.contains(data.getHedge_id() + "-" + data.getWave_id()))) {
                     logger.warn("ONE SIDED TRADE: hedge id: " + data.getHedge_id() + " wave id: " + data.getWave_id() + " execution id: " +  data.getExecution_id() +" REMOVED");
+                    oneSidedTrades.add(data);
                     iter.remove();
                 }
             }
@@ -372,7 +375,7 @@ public class RunPNL {
 
         // first create file object for file placed at location
         // specified by filepath
-        String filename = "PNLReport-"+ System.currentTimeMillis() + ".csv";
+        String filename = "PNLReport.csv";
         String exportPath = filename;
         File file = new File(exportPath);
         try {
@@ -383,7 +386,7 @@ public class RunPNL {
             CSVWriter writer = new CSVWriter(outputfile);
 
             // adding header to csv
-            String[] header = {"Pair", "Hedge_id", "strategy_id", "deal_id", "wave_id", "side", "symbol", "Size","Coins","Price","Post Size","trade count","oc","Flips Position","CL trade size ctcs","CL trade size coin","Opening Trade Size Coins","cum. open coins","wtd avg","RPnL, coin","|||", "Pair", "Hedge_id", "strategy_id", "deal_id", "wave_id", "side", "symbol", "Size", "Coins", "Price", "Post Size","trade count","oc","Flips Position", "CL trade size ctcs","CL trade size coin", "Opening Trade Size Coins","cum. open coins","wtd avg","RPnL, coin"};
+            String[] header = {"Pair", "Hedge_id", "strategy_id", "deal_id", "wave_id", "side", "symbol", "Size","Coins","Price","Post Size","trade count","oc","Flips Position","CL trade size ctcs","CL trade size coin","Opening Trade Size Coins","cum. open coins","wtd avg","RPnL, coin","RPnL USD","|||", "Pair", "Hedge_id", "strategy_id", "deal_id", "wave_id", "side", "symbol", "Size", "Coins", "Price", "Post Size","trade count","oc","Flips Position", "CL trade size ctcs","CL trade size coin", "Opening Trade Size Coins","cum. open coins","wtd avg","RPnL, coin","RPnL USD"};
             writer.writeNext(header);
 
             // add data to csv
@@ -483,6 +486,7 @@ public class RunPNL {
                         dataRow[index++] = calculateCumOpenCoins(prevDataA,dataA);
                         dataRow[index++] = calculateWeightedAvg(prevDataA,dataA);;
                         dataRow[index++] = pnlA;
+                        dataRow[index++] = calculatePNLUSD(pnlA, dataA);
                         dataRow[index++] = "|||";
                         dataRow[index++] = dataB.getBelongingPair();
                         dataRow[index++] = dataB.getHedge_id();
@@ -505,6 +509,7 @@ public class RunPNL {
                         dataRow[index++] = calculateCumOpenCoins(prevDataB, dataB);
                         dataRow[index++] = calculateWeightedAvg(prevDataB,dataB);
                         dataRow[index++] = pnlB;
+                        dataRow[index++] = calculatePNLUSD(pnlB, dataB);
 
 
                         writer.writeNext(dataRow);
@@ -521,6 +526,8 @@ public class RunPNL {
                 }
             }
 
+            processOneSided(writer, header.length);
+
             // closing writer connection
             writer.close();
         }
@@ -530,6 +537,41 @@ public class RunPNL {
 
         return file.getName();
 
+    }
+
+    private static void processOneSided(CSVWriter writer, int rowLength) {
+
+        String[] dataRow = new String[rowLength];
+        writer.writeNext(dataRow);
+        writer.writeNext(dataRow);
+        writer.writeNext(dataRow);
+
+        for (PNLRawData data  : oneSidedTrades){
+            int index = 0;
+
+            dataRow = new String[rowLength];
+
+            dataRow[index++] = data.getBelongingPair();
+            dataRow[index++] = data.getHedge_id();
+            dataRow[index++] = data.getStrategy_id();
+            dataRow[index++] = data.getDeal_id();
+            dataRow[index++] = data.getWave_id();
+            dataRow[index++] = data.getSide();
+            dataRow[index++] = data.getSymbol();
+            dataRow[index++] = data.getExecuted_size();
+            dataRow[index++] = "";
+            dataRow[index++] = data.getExecuted_price();
+
+            writer.writeNext(dataRow);
+        }
+    }
+
+    private static String calculatePNLUSD(String pnl, PNLRawData data) {
+        if (pnl == null || pnl.equals("") || pnl.equals("0")){
+            return "0";
+        } else {
+            return new BigDecimal(pnl).multiply(new BigDecimal(data.getUnderlying_index())).toString();
+        }
     }
 
     private static boolean isFlipPosition(PNLRawData prevData, PNLRawData data, String side) {
