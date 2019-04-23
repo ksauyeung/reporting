@@ -386,7 +386,7 @@ public class RunPNL {
             CSVWriter writer = new CSVWriter(outputfile);
 
             // adding header to csv
-            String[] header = {"Pair", "Hedge_id", "strategy_id", "deal_id", "wave_id", "side", "symbol", "Size","Coins","Price","Post Size","trade count","oc","Flips Position","CL trade size ctcs","CL trade size coin","Opening Trade Size Coins","cum. open coins","wtd avg","RPnL, coin","RPnL USD","|||", "Pair", "Hedge_id", "strategy_id", "deal_id", "wave_id", "side", "symbol", "Size", "Coins", "Price", "Post Size","trade count","oc","Flips Position", "CL trade size ctcs","CL trade size coin", "Opening Trade Size Coins","cum. open coins","wtd avg","RPnL, coin","RPnL USD"};
+            String[] header = {"Pair", "Hedge_id", "strategy_id", "deal_id", "wave_id", "side", "symbol", "Size","Coins","Price","Time","Post Size","trade count","oc","Flips Position","CL trade size ctcs","CL trade size coin","Opening Trade Size Coins","cum. open coins","wtd avg","RPnL, coin","RPnL USD","|||", "Pair", "Hedge_id", "strategy_id", "deal_id", "wave_id", "side", "symbol", "Size", "Coins", "Price", "Time", "Post Size","trade count","oc","Flips Position", "CL trade size ctcs","CL trade size coin", "Opening Trade Size Coins","cum. open coins","wtd avg","RPnL, coin","RPnL USD"};
             writer.writeNext(header);
 
             // add data to csv
@@ -475,6 +475,7 @@ public class RunPNL {
                         dataRow[index++] = dataA.getExecuted_size();
                         dataRow[index++] = calculateCoinCount(dataA);
                         dataRow[index++] = dataA.getExecuted_price();
+                        dataRow[index++] = dataA.getExecution_time();
                         dataRow[index++] = calculatePostTradePositionSize(prevDataA, dataA);
                         dataRow[index++] = calculateTradeCount(prevDataA, dataA, SIDE_A);
                         dataRow[index++] = calculateOC(prevDataA, dataA, SIDE_A);
@@ -498,6 +499,7 @@ public class RunPNL {
                         dataRow[index++] = dataB.getExecuted_size();
                         dataRow[index++] = calculateCoinCount(dataB);
                         dataRow[index++] = dataB.getExecuted_price();
+                        dataRow[index++] = dataB.getExecution_time();
                         dataRow[index++] = calculatePostTradePositionSize(prevDataB, dataB);
                         dataRow[index++] = calculateTradeCount(prevDataB, dataB, SIDE_B);
                         dataRow[index++] = calculateOC(prevDataB, dataB, SIDE_B);
@@ -920,6 +922,7 @@ public class RunPNL {
 
         // derabit
         sizesMap.put(DERABIT_ADAPTER+"BTC*","10");
+        sizesMap.put(DERABIT_ADAPTER+"ETH*","1");
 
         // CRYPTOFACILITIES
         sizesMap.put("PI_*","1");
