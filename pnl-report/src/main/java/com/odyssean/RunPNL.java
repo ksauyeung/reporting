@@ -475,7 +475,7 @@ public class RunPNL {
                         dataRow[index++] = dataA.getExecuted_size();
                         dataRow[index++] = calculateCoinCount(dataA);
                         dataRow[index++] = dataA.getExecuted_price();
-                        dataRow[index++] = dataA.getExecution_time();
+                        dataRow[index++] = replaceNull(dataA.getExecution_time()).replace("\"", "");
                         dataRow[index++] = calculatePostTradePositionSize(prevDataA, dataA);
                         dataRow[index++] = calculateTradeCount(prevDataA, dataA, SIDE_A);
                         dataRow[index++] = calculateOC(prevDataA, dataA, SIDE_A);
@@ -499,7 +499,7 @@ public class RunPNL {
                         dataRow[index++] = dataB.getExecuted_size();
                         dataRow[index++] = calculateCoinCount(dataB);
                         dataRow[index++] = dataB.getExecuted_price();
-                        dataRow[index++] = dataB.getExecution_time();
+                        dataRow[index++] = replaceNull(dataB.getExecution_time()).replace("\"", "");
                         dataRow[index++] = calculatePostTradePositionSize(prevDataB, dataB);
                         dataRow[index++] = calculateTradeCount(prevDataB, dataB, SIDE_B);
                         dataRow[index++] = calculateOC(prevDataB, dataB, SIDE_B);
@@ -563,6 +563,7 @@ public class RunPNL {
             dataRow[index++] = data.getExecuted_size();
             dataRow[index++] = "";
             dataRow[index++] = data.getExecuted_price();
+            dataRow[index++] = replaceNull(data.getExecution_time()).replace("\"", "");
 
             writer.writeNext(dataRow);
         }
@@ -930,6 +931,10 @@ public class RunPNL {
         sizesMap.put("PV_XRPXBT*","1");
         sizesMap.put("FV_XRPXBT*","1");
 
+    }
+
+    public static String replaceNull(String input) {
+        return input == null ? "" : input;
     }
 
 
