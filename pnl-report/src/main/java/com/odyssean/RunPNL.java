@@ -20,7 +20,7 @@ public class RunPNL {
     private static final String SIDE_B = "B";
     private static final int ROUNDING_SCALE = 20;
     private static final String OKEXFUTURE_ADAPTER = "OKEXFUTURE_ADAPTER";
-    private static final String DERABIT_ADAPTER = "DERABIT_ADAPTER";
+    private static final String DERABIT_ADAPTER = "DERIBIT_ADAPTER";
     private static final String BITMEX_ADAPTER = "BITMEX_ADAPTER";
     private static final String BELONGING_PAIR_DEFAULT = "initial";
 
@@ -881,11 +881,6 @@ public class RunPNL {
 
         String adapter = data.getAdapter_id();
         String symobl = data.getSymbol();
-
-
-        if (!(adapter.equalsIgnoreCase(OKEXFUTURE_ADAPTER)|| adapter.equalsIgnoreCase(DERABIT_ADAPTER))){
-            adapter = "";
-        }
 
         for (Map.Entry<String, String> e : sizesMap.entrySet()) {
             if ((adapter+symobl).startsWith(e.getKey().replace("*",""))) {
