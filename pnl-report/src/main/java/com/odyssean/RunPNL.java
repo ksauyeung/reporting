@@ -882,6 +882,13 @@ public class RunPNL {
         String adapter = data.getAdapter_id();
         String symobl = data.getSymbol();
 
+        if (!(adapter.equalsIgnoreCase(OKEXFUTURE_ADAPTER)
+                || adapter.equalsIgnoreCase(DERABIT_ADAPTER)
+                || adapter.equalsIgnoreCase(BITMEX_ADAPTER))){
+            adapter = "";
+        }
+
+
         for (Map.Entry<String, String> e : sizesMap.entrySet()) {
             if ((adapter+symobl).startsWith(e.getKey().replace("*",""))) {
                 return new BigDecimal(e.getValue());
@@ -900,21 +907,21 @@ public class RunPNL {
         // okex
         sizesMap.put(OKEXFUTURE_ADAPTER+"BTC*","100");
         sizesMap.put(OKEXFUTURE_ADAPTER+"ETH*","10");
-        sizesMap.put("ETC*","10");
-        sizesMap.put("XRP*","10");
-        sizesMap.put("EOS*","10");
-        sizesMap.put("BCH*","10");
-        sizesMap.put("BSV*","10");
+        sizesMap.put(OKEXFUTURE_ADAPTER+"ETC*","10");
+        sizesMap.put(OKEXFUTURE_ADAPTER+"XRP*","10");
+        sizesMap.put(OKEXFUTURE_ADAPTER+"EOS*","10");
+        sizesMap.put(OKEXFUTURE_ADAPTER+"BCH*","10");
+        sizesMap.put(OKEXFUTURE_ADAPTER+"BSV*","10");
 
         // bitmex
-        sizesMap.put("XBT*","1");
-        sizesMap.put("ETHUSD","1");
+        sizesMap.put(BITMEX_ADAPTER+"XBT*","1");
+        sizesMap.put(BITMEX_ADAPTER+"ETHUSD","1");
         sizesMap.put(BITMEX_ADAPTER+"ETH*","1");
-        sizesMap.put("ADA*","1");
-        sizesMap.put("BCH*","1");
-        sizesMap.put("EOS*","1");
-        sizesMap.put("LTC*","1");
-        sizesMap.put("XRP*","1");
+        sizesMap.put(BITMEX_ADAPTER+"ADA*","1");
+        sizesMap.put(BITMEX_ADAPTER+"BCH*","1");
+        sizesMap.put(BITMEX_ADAPTER+"EOS*","1");
+        sizesMap.put(BITMEX_ADAPTER+"LTC*","1");
+        sizesMap.put(BITMEX_ADAPTER+"XRP*","1");
 
         // derabit
         sizesMap.put(DERABIT_ADAPTER+"BTC*","10");
