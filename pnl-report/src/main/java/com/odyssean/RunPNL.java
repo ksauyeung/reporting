@@ -894,7 +894,7 @@ public class RunPNL {
                 return new BigDecimal(e.getValue());
             }
         }
-        return new BigDecimal("10");
+        return new BigDecimal("1");
 
     }
 
