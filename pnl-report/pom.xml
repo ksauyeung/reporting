@@ -59,7 +59,7 @@
                     </descriptorRefs>
                     <archive>
                         <manifest>
-                            <mainClass>main.java.com.odyssean.RunPNL</mainClass>
+                            <mainClass>main.java.com.odyssean.PNLExecutor</mainClass>
                         </manifest>
                     </archive>
                 </configuration>

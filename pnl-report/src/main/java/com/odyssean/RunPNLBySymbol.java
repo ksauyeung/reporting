@@ -13,20 +13,14 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 
-public class RunPNL extends PNLBase{
-
+public class RunPNLBySymbol extends PNLBase{
     final static Logger logger = Logger.getLogger(RunPNL.class);
-    private static final String SIDE_A = "A";
-    private static final String SIDE_B = "B";
     private static final int ROUNDING_SCALE = 20;
 
     private static final String BELONGING_PAIR_DEFAULT = "initial";
-    private static final String REPORT_FILE_NAME = "PNLReport.csv";
-
+    private static final String REPORT_FILE_NAME = "PNLReportBySymbol.csv";
 
     private static Map<String, String> openingTradeSide = new HashMap<>();
-    private static Map<String, String> openingHedgeSymbol = new HashMap<>();
-    private static Map<String, String> openingHedgeWave = new HashMap<>();
     private static Map<String, String> waveSymbol = new HashMap<>();
     private static String SIDE_SELL = "SELL";
     private static String SIDE_BUY = "BUY";
@@ -56,26 +50,21 @@ public class RunPNL extends PNLBase{
         logger.info("Loading csv into memory Ended");
         logger.info("Loaded: "+ rawList.size() + " trades.");
 
-        weedOutOneSidedTrades(rawList);
-
-        logger.info("After removing one sided: "+ rawList.size() + " trades.");
 
         // loadUpPairs
         loadUpPairs(rawList);
 
-        logger.info("Grouping by Hedge Id, Wave Id, Report Side Started");
+        logger.info("Grouping by Symbol Started");
 
-        //(1, (5, ( A, List(obj)))
+        Map<String, SortedSet<PNLRawData>> sybolList = groupBySymbolList(rawList);
 
-        Map<String ,Map<String, Map<String, SortedSet<PNLRawData>>>> splitBySideList = groupByHedgeIdWaveIdABSidegroupedList(rawList);
+        logger.info("Grouping by Symbol Ended");
 
-
-        logger.info("Grouping by Hedge Id, Wave Id, Report Side Ended");
-        logger.info("Loaded: "+ splitBySideList.size() + " hedges.");
+        logger.info("Loaded: "+ sybolList.size() + " hedges.");
 
         logger.info("Generating Report Started");
 
-        String reportName = generateReportCsv(splitBySideList);
+        String reportName = generateReportCsv(sybolList);
 
         logger.info("Generating Report Ended");
         logger.info("Report: " + reportName);
@@ -168,35 +157,6 @@ public class RunPNL extends PNLBase{
         return item;
     };
 
-    private static void weedOutOneSidedTrades(SortedSet<PNLRawData> list) {
-        synchronized(syncObject) {
-
-            Set<String> sells = new HashSet<>();
-            Set<String> buys = new HashSet<>();
-
-
-            for (PNLRawData data : list) {
-                if (data.getSide().equals(SIDE_SELL)) {
-                    sells.add(data.getHedge_id() + "-" + data.getWave_id());
-                }
-                if (data.getSide().equals(SIDE_BUY)) {
-                    buys.add(data.getHedge_id() + "-" + data.getWave_id());
-                }
-            }
-            Iterator<PNLRawData> iter = list.iterator();
-
-            while (iter.hasNext()) {
-                PNLRawData data = iter.next();
-                if (!(sells.contains(data.getHedge_id() + "-" + data.getWave_id()) && buys.contains(data.getHedge_id() + "-" + data.getWave_id()))) {
-                    logger.warn("ONE SIDED TRADE: hedge id: " + data.getHedge_id() + " wave id: " + data.getWave_id() + " execution id: " +  data.getExecution_id() +" REMOVED");
-                    oneSidedTrades.add(data);
-                    iter.remove();
-                }
-            }
-        }
-
-    }
-
 
     private static void loadUpPairs(SortedSet<PNLRawData> list) {
 
@@ -229,118 +189,29 @@ public class RunPNL extends PNLBase{
         }
     }
 
+    //
 
-    private static Map<String,Map<String,Map<String,SortedSet<PNLRawData>>>> groupByHedgeIdWaveIdABSidegroupedList(SortedSet<PNLRawData> list) {
+    private static Map<String, SortedSet<PNLRawData>> groupBySymbolList(SortedSet<PNLRawData> list) {
 
-        Map<String,Map<String,Map<String,SortedSet<PNLRawData>>>> map = new HashMap<>();
+        Map<String, SortedSet<PNLRawData>> map = new HashMap<>();
 
         for (PNLRawData row : list){
 
             String pairTrading = row.getBelongingPair();
-            String waveId = row.getWave_id();
 
             if (map.containsKey(pairTrading)){
 
-
-                Map<String, Map<String, SortedSet<PNLRawData>>> setSideWaveMap = map.get(pairTrading);
-
-                if (setSideWaveMap.containsKey(waveId)){
-                    Map<String, SortedSet<PNLRawData>> setSideMap = setSideWaveMap.get(waveId);
-
-                    String rowSumbol = row.getSymbol();
-
-                    if(rowSumbol.equalsIgnoreCase(openingHedgeSymbol.get(pairTrading))){
-                        // we are on side A
-                        if (setSideMap.containsKey(SIDE_A)){
-                            SortedSet<PNLRawData> treeSet = setSideMap.get(SIDE_A);
-                            calculateExecutedSize(row, SIDE_A);
-                            treeSet.add(row);
-                        } else {
-                            SortedSet<PNLRawData> treeSet = new TreeSet<>();
-                            treeSet.add(row);
-                            calculateExecutedSize(row, SIDE_A);
-                            setSideMap.put(SIDE_A, treeSet);
-                        }
-
-                    } else {
-                        if (setSideMap.containsKey(SIDE_B)){
-                            SortedSet<PNLRawData> treeSet = setSideMap.get(SIDE_B);
-                            calculateExecutedSize(row, SIDE_B);
-                            treeSet.add(row);
-                        } else {
-                            SortedSet<PNLRawData> treeSet = new TreeSet<>();
-                            //calculateExecutedSize(row, SIDE_B);
-                            treeSet.add(row);
-                            setSideMap.put(SIDE_B, treeSet);
-
-                            if (openingHedgeWave.get(pairTrading).equalsIgnoreCase(waveId)){
-                                openingTradeSide.put(SIDE_B+pairTrading, row.getSide());
-
-                                //row.setPostTradePositionSize(row.getExecuted_size());
-                                row.setPostTradePositionSize(new BigDecimal(row.getExecuted_size()).toString());
-                                row.setTradeCount("1");
-                                row.setOc("O");
-                                row.setFlipsPosition("N");
-                                row.setCumOpenCoins(calculateCoinCount(row));
-                                row.setWtdAvg(row.getExecuted_price());
-                            }
-                            calculateExecutedSize(row, SIDE_B);
-                        }
-                    }
-
-
-                } else {
-
-                    String openingHedgeSymbolData = openingHedgeSymbol.get(pairTrading);
-
-                    String reocrdSide = SIDE_A;
-                    calculateExecutedSize(row, SIDE_A);
-                    if(!openingHedgeSymbolData.equalsIgnoreCase(row.getSymbol())){
-                        reocrdSide = SIDE_B;
-
-                        if (openingHedgeWave.get(pairTrading).equalsIgnoreCase(waveId)){
-
-                            openingTradeSide.put(SIDE_B+pairTrading, row.getSide());
-
-                            row.setPostTradePositionSize(new BigDecimal(row.getExecuted_size()).toString());
-                            row.setTradeCount("1");
-                            row.setOc("O");
-                            row.setFlipsPosition("N");
-                            row.setCumOpenCoins(calculateCoinCount(row));
-                            row.setWtdAvg(row.getExecuted_price());
-                        }
-                        calculateExecutedSize(row, SIDE_B);
-                    }
-
-                    SortedSet<PNLRawData> treeSet = new TreeSet<>();
-                    treeSet.add(row);
-
-                    Map<String, SortedSet<PNLRawData>> setSideMap = new HashMap<>();
-                    setSideMap.put(reocrdSide, treeSet); // note this is the very first transaction that dictates side A and opening trade.
-
-
-                    setSideWaveMap.put(waveId, setSideMap);
-
-
-                }
-
+                SortedSet<PNLRawData> treeSet = map.get(pairTrading);
+                treeSet.add(row);
 
             } else {
 
                 SortedSet<PNLRawData> treeSet = new TreeSet<>();
                 treeSet.add(row);
 
-                Map<String, SortedSet<PNLRawData>> setSideMap = new HashMap<>();
-                setSideMap.put(SIDE_A, treeSet); // note this is the very first transaction that dictates side A and opening trade.
+                map.put(pairTrading, treeSet);
 
-                Map<String, Map<String, SortedSet<PNLRawData>>> setSideWaveMap = new HashMap<>();
-                setSideWaveMap.put(waveId, setSideMap);
-
-                map.put(pairTrading, setSideWaveMap);
-
-                openingTradeSide.put(SIDE_A+pairTrading, row.getSide());
-                openingHedgeWave.put(pairTrading, row.getWave_id());
-                openingHedgeSymbol.put(pairTrading, row.getSymbol());
+                openingTradeSide.put(pairTrading, row.getSide());
 
                 // set post close position size initial
                 row.setPostTradePositionSize(row.getExecuted_size());
@@ -352,14 +223,15 @@ public class RunPNL extends PNLBase{
                 row.setWtdAvg(row.getExecuted_price());
 
             }
+            calculateExecutedSize(row);
+
         }
 
         return map;
     }
 
 
-
-    private static String generateReportCsv(Map<String, Map<String, Map<String, SortedSet<PNLRawData>>>> hedgeWaveSideMap) {
+    private static String generateReportCsv(Map<String, SortedSet<PNLRawData>> map) {
         // loop through the hedge ids
         // loop through the wave ids
         // get side A and Side B collection
@@ -369,8 +241,7 @@ public class RunPNL extends PNLBase{
 
         // first create file object for file placed at location
         // specified by filepath
-        String filename = REPORT_FILE_NAME;
-        String exportPath = filename;
+        String exportPath = REPORT_FILE_NAME;
         File file = new File(exportPath);
         try {
             // create FileWriter object with file as parameter
@@ -380,149 +251,83 @@ public class RunPNL extends PNLBase{
             CSVWriter writer = new CSVWriter(outputfile);
 
             // adding header to csv
-            String[] header = {"Pair", "Hedge_id", "strategy_id", "deal_id", "wave_id", "side", "symbol", "Size","Coins","Price","Time","Post Size","trade count","oc","Flips Position","CL trade size ctcs","CL trade size coin","Opening Trade Size Coins","cum. open coins","wtd avg","RPnL, coin","RPnL USD","|||", "Pair", "Hedge_id", "strategy_id", "deal_id", "wave_id", "side", "symbol", "Size", "Coins", "Price", "Time", "Post Size","trade count","oc","Flips Position", "CL trade size ctcs","CL trade size coin", "Opening Trade Size Coins","cum. open coins","wtd avg","RPnL, coin","RPnL USD"};
+            String[] header = {"Pair", "Hedge_id", "strategy_id", "deal_id", "wave_id", "side", "symbol", "Size", "Coins", "Price", "Time", "Post Size", "trade count", "oc", "Flips Position", "CL trade size ctcs", "CL trade size coin", "Opening Trade Size Coins", "cum. open coins", "wtd avg", "RPnL, coin", "RPnL USD"};
             writer.writeNext(header);
 
             // add data to csv
             // sort
-            SortedSet<String> hedgeKeys =  new TreeSet<>(hedgeWaveSideMap.keySet());
+            SortedSet<String> symbolKeys = new TreeSet<>(map.keySet());
 
-            for (String pairTrading : hedgeKeys){
-                Map<String, Map<String, SortedSet<PNLRawData>>> waveAndSideMap = hedgeWaveSideMap.get(pairTrading);
+            for (String pairTrading : symbolKeys) {
 
-                SortedSet<Long> waveKeys = new TreeSet<>(waveAndSideMap.keySet().stream()
-                        .map(s -> Long.parseLong(s))
-                        .collect(Collectors.toSet()));
+                SortedSet<PNLRawData> treeSet = map.get(pairTrading);
 
 
                 PNLRawData prevDataA = null;
-                PNLRawData prevDataB = null;
-
-                for (Long waveId : waveKeys) {
-                    Map<String, SortedSet<PNLRawData>> sideMap = waveAndSideMap.get(waveId.toString());
 
 
-                    SortedSet<PNLRawData> dataSetSideA = sideMap.get(SIDE_A);
-                    SortedSet<PNLRawData> dataSetSideB = sideMap.get(SIDE_B);
+                Iterator<PNLRawData> dataSetSideAIterator = Collections.<PNLRawData>emptyList().iterator();
 
-                    int aSize = 0;
-                    Iterator<PNLRawData> dataSetSideAIterator = Collections.<PNLRawData>emptyList().iterator();
-                    if (dataSetSideA != null){
-                        aSize = dataSetSideA.size();
-                        dataSetSideAIterator = dataSetSideA.iterator();
-                    }
+                dataSetSideAIterator = treeSet.iterator();
 
-                    int bSize = 0;
-                    Iterator<PNLRawData> dataSetSideBIterator = Collections.<PNLRawData>emptyList().iterator();
-                    if (dataSetSideB != null){
-                        bSize = dataSetSideB.size();
-                        dataSetSideBIterator = dataSetSideB.iterator();
-                    }
 
-                    int maxRowsPerHedge = Math.max(aSize, bSize);
+                String[] dataRow = new String[header.length];
 
-                    String[] dataRow = new String[header.length];
+                PNLRawData dataA = new PNLRawData();
 
-                    for (int i = 0; i < maxRowsPerHedge; i++) {
-                        PNLRawData dataA = new PNLRawData();
-                        PNLRawData dataB = new PNLRawData();
+                while (dataSetSideAIterator.hasNext()) {
 
-                        if (dataSetSideAIterator.hasNext()) {
-                            dataA = dataSetSideAIterator.next();
+                    dataA = dataSetSideAIterator.next();
 
-                            dataA.setFlipsPosition(NO);
-                            if(prevDataA != null){
-                                if (new BigDecimal(prevDataA.getPostTradePositionSize()).compareTo(BigDecimal.ZERO) == 0){
-                                    openingTradeSide.put(SIDE_A+dataA.getBelongingPair(), dataA.getSide());
-                                }
-                                if(isFlipPosition(prevDataA, dataA, SIDE_A)){
-                                    openingTradeSide.put(SIDE_A+dataA.getBelongingPair(), dataA.getSide());
-                                }
-                            }
-                            calculateExecutedSize(dataA, SIDE_A);
+                    dataA.setFlipsPosition(NO);
+                    if (prevDataA != null) {
+                        if (new BigDecimal(prevDataA.getPostTradePositionSize()).compareTo(BigDecimal.ZERO) == 0) {
+                            openingTradeSide.put(dataA.getBelongingPair(), dataA.getSide());
                         }
-
-                        if (dataSetSideBIterator.hasNext()) {
-                            dataB = dataSetSideBIterator.next();
-
-                            dataB.setFlipsPosition(NO);
-                            if(prevDataB != null){
-                                if (new BigDecimal(prevDataB.getPostTradePositionSize()).compareTo(BigDecimal.ZERO) == 0){
-                                    openingTradeSide.put(SIDE_B+dataB.getBelongingPair(), dataB.getSide());
-                                }
-                                if (isFlipPosition(prevDataB, dataB, SIDE_B)){
-                                    openingTradeSide.put(SIDE_B+dataB.getBelongingPair(), dataB.getSide());
-                                }
-                            }
-                            calculateExecutedSize(dataB, SIDE_B);
-                        }
-
-
-                        int index = 0;
-                        dataRow[index++] = dataA.getBelongingPair();
-                        dataRow[index++] = dataA.getHedge_id();
-                        dataRow[index++] = dataA.getStrategy_id();
-                        dataRow[index++] = dataA.getDeal_id();
-                        dataRow[index++] = dataA.getWave_id();
-                        dataRow[index++] = dataA.getSide();
-                        dataRow[index++] = dataA.getSymbol();
-                        dataRow[index++] = dataA.getExecuted_size();
-                        dataRow[index++] = calculateCoinCount(dataA);
-                        dataRow[index++] = dataA.getExecuted_price();
-                        dataRow[index++] = replaceNull(dataA.getExecution_time()).replace("\"", "");
-                        dataRow[index++] = calculatePostTradePositionSize(prevDataA, dataA);
-                        dataRow[index++] = calculateTradeCount(prevDataA, dataA, SIDE_A);
-                        dataRow[index++] = calculateOC(prevDataA, dataA, SIDE_A);
-                        dataRow[index++] = dataA.getFlipsPosition();
-                        dataRow[index++] = calculateCLTradeSizeCTCS(prevDataA, dataA);
-                        dataRow[index++] = calculateCLTradeSizeCoin(dataA);
-                        dataRow[index++] = calculateOpeningTradeSizeCoins(dataA);
-                        String pnlA = calculatePNL(prevDataA,dataA); // pnl calc needed for cum open coins
-                        dataRow[index++] = calculateCumOpenCoins(prevDataA,dataA);
-                        dataRow[index++] = calculateWeightedAvg(prevDataA,dataA);;
-                        dataRow[index++] = pnlA;
-                        dataRow[index++] = calculatePNLUSD(pnlA, dataA);
-                        dataRow[index++] = "|||";
-                        dataRow[index++] = dataB.getBelongingPair();
-                        dataRow[index++] = dataB.getHedge_id();
-                        dataRow[index++] = dataB.getStrategy_id();
-                        dataRow[index++] = dataB.getDeal_id();
-                        dataRow[index++] = dataB.getWave_id();
-                        dataRow[index++] = dataB.getSide();
-                        dataRow[index++] = dataB.getSymbol();
-                        dataRow[index++] = dataB.getExecuted_size();
-                        dataRow[index++] = calculateCoinCount(dataB);
-                        dataRow[index++] = dataB.getExecuted_price();
-                        dataRow[index++] = replaceNull(dataB.getExecution_time()).replace("\"", "");
-                        dataRow[index++] = calculatePostTradePositionSize(prevDataB, dataB);
-                        dataRow[index++] = calculateTradeCount(prevDataB, dataB, SIDE_B);
-                        dataRow[index++] = calculateOC(prevDataB, dataB, SIDE_B);
-                        dataRow[index++] = dataB.getFlipsPosition();
-                        dataRow[index++] = calculateCLTradeSizeCTCS(prevDataB, dataB);
-                        dataRow[index++] = calculateCLTradeSizeCoin(dataB);
-                        dataRow[index++] = calculateOpeningTradeSizeCoins(dataB);
-                        String pnlB = calculatePNL(prevDataB,dataB);
-                        dataRow[index++] = calculateCumOpenCoins(prevDataB, dataB);
-                        dataRow[index++] = calculateWeightedAvg(prevDataB,dataB);
-                        dataRow[index++] = pnlB;
-                        dataRow[index++] = calculatePNLUSD(pnlB, dataB);
-
-
-                        writer.writeNext(dataRow);
-
-                        // do not set empty rows as previous
-                        if(dataA.getWave_id() !=null) {
-                            prevDataA = dataA;
-                        }
-                        if (dataB.getWave_id() != null) {
-                            prevDataB = dataB;
+                        if (isFlipPosition(prevDataA, dataA)) {
+                            openingTradeSide.put(dataA.getBelongingPair(), dataA.getSide());
                         }
                     }
+                    calculateExecutedSize(dataA);
 
+
+                    int index = 0;
+                    dataRow[index++] = dataA.getBelongingPair();
+                    dataRow[index++] = dataA.getHedge_id();
+                    dataRow[index++] = dataA.getStrategy_id();
+                    dataRow[index++] = dataA.getDeal_id();
+                    dataRow[index++] = dataA.getWave_id();
+                    dataRow[index++] = dataA.getSide();
+                    dataRow[index++] = dataA.getSymbol();
+                    dataRow[index++] = dataA.getExecuted_size();
+                    dataRow[index++] = calculateCoinCount(dataA);
+                    dataRow[index++] = dataA.getExecuted_price();
+                    dataRow[index++] = replaceNull(dataA.getExecution_time()).replace("\"", "");
+                    dataRow[index++] = calculatePostTradePositionSize(prevDataA, dataA);
+                    dataRow[index++] = calculateTradeCount(prevDataA, dataA);
+                    dataRow[index++] = calculateOC(prevDataA, dataA);
+                    dataRow[index++] = dataA.getFlipsPosition();
+                    dataRow[index++] = calculateCLTradeSizeCTCS(prevDataA, dataA);
+                    dataRow[index++] = calculateCLTradeSizeCoin(dataA);
+                    dataRow[index++] = calculateOpeningTradeSizeCoins(dataA);
+                    String pnlA = calculatePNL(prevDataA, dataA); // pnl calc needed for cum open coins
+                    dataRow[index++] = calculateCumOpenCoins(prevDataA, dataA);
+                    dataRow[index++] = calculateWeightedAvg(prevDataA, dataA);
+                    ;
+                    dataRow[index++] = pnlA;
+                    dataRow[index++] = calculatePNLUSD(pnlA, dataA);
+
+
+                    writer.writeNext(dataRow);
+
+                    // do not set empty rows as previous
+                    if (dataA.getWave_id() != null) {
+                        prevDataA = dataA;
+                    }
                 }
+
             }
 
-            processOneSided(writer, header.length);
 
             // closing writer connection
             writer.close();
@@ -535,33 +340,18 @@ public class RunPNL extends PNLBase{
 
     }
 
-    private static void processOneSided(CSVWriter writer, int rowLength) {
-
-        String[] dataRow = new String[rowLength];
-        writer.writeNext(dataRow);
-        writer.writeNext(dataRow);
-        writer.writeNext(dataRow);
-
-        for (PNLRawData data  : oneSidedTrades){
-            int index = 0;
-
-            dataRow = new String[rowLength];
-
-            dataRow[index++] = data.getBelongingPair();
-            dataRow[index++] = data.getHedge_id();
-            dataRow[index++] = data.getStrategy_id();
-            dataRow[index++] = data.getDeal_id();
-            dataRow[index++] = data.getWave_id();
-            dataRow[index++] = data.getSide();
-            dataRow[index++] = data.getSymbol();
-            dataRow[index++] = data.getExecuted_size();
-            dataRow[index++] = "";
-            dataRow[index++] = data.getExecuted_price();
-            dataRow[index++] = replaceNull(data.getExecution_time()).replace("\"", "");
-
-            writer.writeNext(dataRow);
+    private static String calculateExecutedSize(PNLRawData data) {
+        if (data.getExecuted_size() == null) {
+            return null;
         }
+        BigDecimal current = new BigDecimal(data.getExecuted_size());
+        BigDecimal sign = data.getSide().equalsIgnoreCase(openingTradeSide.get(data.getBelongingPair())) ? BigDecimal.ONE : new BigDecimal("-1");
+        BigDecimal finalTotal = sign.multiply(current.abs()); // doing abs since the sign above dictates now position
+        data.setExecuted_size(finalTotal.toString());
+        return finalTotal.toString();
     }
+
+
 
     private static String calculatePNLUSD(String pnl, PNLRawData data) {
         if (pnl == null || pnl.equals("") || pnl.equals("0")){
@@ -571,11 +361,11 @@ public class RunPNL extends PNLBase{
         }
     }
 
-    private static boolean isFlipPosition(PNLRawData prevData, PNLRawData data, String side) {
+    private static boolean isFlipPosition(PNLRawData prevData, PNLRawData data) {
 
         // prev data should not be null here
 
-        if (!openingTradeSide.get(side+data.getBelongingPair()).equalsIgnoreCase(data.getSide())){
+        if (!openingTradeSide.get(data.getBelongingPair()).equalsIgnoreCase(data.getSide())){
             long prevPositionSize = new BigDecimal(prevData.getPostTradePositionSize()).abs().longValue();
             long positionSize = new BigDecimal(data.getExecuted_size()).abs().longValue();
 
@@ -589,24 +379,6 @@ public class RunPNL extends PNLBase{
     }
 
     private static String calculatePNL(PNLRawData prevData, PNLRawData data) {
-
-        /*
-
-    IF(
-        F7 = "BUY",
-        IF(
-            M7 = "RPnL",
-            ( O7 * $N$3 / J7 ) + (- O7 * $N$3 / S6 ),
-            0
-        ),
-        IF(
-            M7 = "RPnL",
-            (- O7 * $N$3 / J7 ) + ( O7 * $N$3 / S6 ),
-            0
-        )
-    )
-
-         */
 
 
         if (data.getExecuted_size() == null) {
@@ -778,7 +550,7 @@ public class RunPNL extends PNLBase{
         return "0";
     }
 
-    private static String calculateTradeCount(PNLRawData prevData, PNLRawData data, String reportSide) {
+    private static String calculateTradeCount(PNLRawData prevData, PNLRawData data) {
         if (data.getExecuted_size() == null) {
             return null;
         }
@@ -803,7 +575,7 @@ public class RunPNL extends PNLBase{
         }
     }
 
-    private static String calculateOC(PNLRawData prevData, PNLRawData data, String reportSide) {
+    private static String calculateOC(PNLRawData prevData, PNLRawData data) {
         // this makes sure its an active row that has data
         if (data.getExecuted_size() == null) {
             return null;
@@ -824,17 +596,6 @@ public class RunPNL extends PNLBase{
         }
     }
 
-    private static String calculateExecutedSize(PNLRawData data, String side) {
-        if (data.getExecuted_size() == null) {
-            return null;
-        }
-        BigDecimal current = new BigDecimal(data.getExecuted_size());
-        BigDecimal sign = data.getSide().equalsIgnoreCase(openingTradeSide.get(side+data.getBelongingPair())) ? BigDecimal.ONE : new BigDecimal("-1");
-        BigDecimal finalTotal = sign.multiply(current.abs()); // doing abs since the sign above dictates now position
-        data.setExecuted_size(finalTotal.toString());
-        return finalTotal.toString();
-    }
-
     private static String calculatePostTradePositionSize(PNLRawData prevData, PNLRawData data) {
         if (data.getExecuted_size() == null) {
             return null;
@@ -846,7 +607,7 @@ public class RunPNL extends PNLBase{
 
             BigDecimal finalTotal;
             if (!data.getFlipsPosition().equalsIgnoreCase(YES)) {
-                 finalTotal = runningTotal.add(current);
+                finalTotal = runningTotal.add(current);
             } else {
                 finalTotal = runningTotal.subtract(current).abs();
             }
@@ -879,14 +640,6 @@ public class RunPNL extends PNLBase{
         data.setSumCoin(val);
         return val;
     }
-
-
-
-
-    public static String replaceNull(String input) {
-        return input == null ? "" : input;
-    }
-
 
 
 
