@@ -21,7 +21,6 @@ public class RunPNLBySymbol extends PNLBase{
     private static final String REPORT_FILE_NAME = "PNLReportBySymbol.csv";
 
     private static Map<String, String> openingTradeSide = new HashMap<>();
-    private static Map<String, String> waveSymbol = new HashMap<>();
     private static String SIDE_SELL = "SELL";
     private static String SIDE_BUY = "BUY";
     private static Object syncObject = new Object();
@@ -29,8 +28,6 @@ public class RunPNLBySymbol extends PNLBase{
 
     private static String YES = "Y";
     private static String NO = "N";
-
-    private static String JOIN_SYMBOLS = "@@@";
 
     private static SortedSet<PNLRawData> oneSidedTrades = new TreeSet<>();
 
@@ -50,9 +47,6 @@ public class RunPNLBySymbol extends PNLBase{
         logger.info("Loading csv into memory Ended");
         logger.info("Loaded: "+ rawList.size() + " trades.");
 
-
-        // loadUpPairs
-        loadUpPairs(rawList);
 
         logger.info("Grouping by Symbol Started");
 
@@ -158,37 +152,6 @@ public class RunPNLBySymbol extends PNLBase{
     };
 
 
-    private static void loadUpPairs(SortedSet<PNLRawData> list) {
-
-        for (PNLRawData data : list) {
-            String runningSymbol = data.getSymbol();
-            String runningWave = data.getWave_id();
-            if (waveSymbol.keySet().contains(runningWave)) {
-                String alreadyIn = waveSymbol.get(runningWave);
-                if (!alreadyIn.contains(runningSymbol)) {
-                    waveSymbol.put(runningWave, alreadyIn + JOIN_SYMBOLS + runningSymbol);
-                }
-            } else {
-                waveSymbol.put(runningWave, runningSymbol);
-            }
-
-        }
-
-        Set<String> waveIds = waveSymbol.keySet();
-
-        for (String waveId : waveIds){
-            String symbols = waveSymbol.get(waveId);
-            String[] pairsArray = symbols.split(JOIN_SYMBOLS);
-            Arrays.sort(pairsArray);
-            waveSymbol.put(waveId, String.join(JOIN_SYMBOLS, pairsArray));
-        }
-
-        // set back upstream
-        for (PNLRawData data : list) {
-            data.setBelongingPair(waveSymbol.get(data.getWave_id()));
-        }
-    }
-
     //
 
     private static Map<String, SortedSet<PNLRawData>> groupBySymbolList(SortedSet<PNLRawData> list) {
@@ -196,6 +159,9 @@ public class RunPNLBySymbol extends PNLBase{
         Map<String, SortedSet<PNLRawData>> map = new HashMap<>();
 
         for (PNLRawData row : list){
+
+            // all logic with pairs applies to symbol now
+            row.setBelongingPair(row.getSymbol());
 
             String pairTrading = row.getBelongingPair();
 
