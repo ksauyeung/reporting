@@ -161,7 +161,7 @@ public class RunPNLBySymbol extends PNLBase{
         for (PNLRawData row : list){
 
             // all logic with pairs applies to symbol now
-            row.setBelongingPair(row.getSymbol());
+            row.setBelongingPair(row.getAdapter_id()+"--"+row.getSymbol());
 
             String pairTrading = row.getBelongingPair();
 
